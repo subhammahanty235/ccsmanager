@@ -38,13 +38,9 @@ ccmanager gives you a visual interface to manage these sessions without digging 
 ## Install
 
 ```bash
-# Clone and build
 git clone <repo>
 cd ccmanager
-go build -o ccmanager .
-
-# Or install directly
-go install github.com/youruser/ccmanager@latest
+go build -o ccmanager ./cmd/ccmanager
 ```
 
 Requires Go 1.21+ and the `claude` CLI installed.
@@ -71,6 +67,34 @@ Requires Go 1.21+ and the `claude` CLI installed.
 | `?` | Show help |
 | `q` | Quit |
 
+## Project Structure
+
+```
+ccmanager/
+├── cmd/
+│   └── ccmanager/
+│       └── main.go           # Entry point
+├── internal/
+│   ├── app/
+│   │   ├── model.go          # Application state
+│   │   ├── update.go         # Input handling, state transitions
+│   │   └── view.go           # UI rendering
+│   ├── session/
+│   │   ├── session.go        # Session type and operations
+│   │   ├── scanner.go        # Directory scanning, search, filter
+│   │   ├── parser.go         # JSONL parsing
+│   │   └── message.go        # Message types
+│   ├── ui/
+│   │   ├── styles.go         # Lipgloss color scheme
+│   │   ├── keys.go           # Keybindings
+│   │   ├── filetree.go       # File tree rendering
+│   │   └── format.go         # Time/size formatting
+│   └── claude/
+│       └── paths.go          # Claude directory utilities
+├── go.mod
+└── README.md
+```
+
 ## How It Works
 
 1. **Scans** `~/.claude/projects/` for JSONL session files
@@ -79,18 +103,6 @@ Requires Go 1.21+ and the `claude` CLI installed.
 4. **Resumes** sessions by calling `claude --resume <session-id>`
 
 The session files are read-only - ccmanager never modifies your conversation history (except when you explicitly delete a session).
-
-## File Structure
-
-```
-~/.claude/
-└── projects/
-    └── -Users-you-myproject/     # Encoded project path
-        ├── abc123.jsonl          # Session file
-        └── def456.jsonl          # Another session
-```
-
-ccmanager decodes these directory names back to readable paths and displays the project name in the UI.
 
 ## Dependencies
 

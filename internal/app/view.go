@@ -1,12 +1,11 @@
-/*
-Rendering logic for the three-panel TUI layout.
-Handles the sessions list, chat history, and file changes panels.
-*/
-package main
+package app
 
 import (
 	"fmt"
 	"strings"
+
+	"ccmanager/internal/session"
+	"ccmanager/internal/ui"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -42,10 +41,8 @@ func (m Model) View() string {
 	return b.String()
 }
 
-// --- Top/Bottom Bars ---
-
 func (m Model) renderTopBar() string {
-	title := m.styles.Bold.Foreground(ColorPrimary).Render("Claude Code Manager")
+	title := m.Styles.Bold.Foreground(ui.ColorPrimary).Render("Claude Code Manager")
 
 	var parts []string
 	parts = append(parts, title)
@@ -54,18 +51,18 @@ func (m Model) renderTopBar() string {
 		stats := fmt.Sprintf(" | %d sessions | %d projects | %s",
 			len(m.sessionList.Sessions),
 			m.sessionList.ProjectCount,
-			FormatBytes(m.sessionList.TotalSize))
-		parts = append(parts, m.styles.StatusText.Render(stats))
+			ui.FormatBytes(m.sessionList.TotalSize))
+		parts = append(parts, m.Styles.StatusText.Render(stats))
 	}
 
 	if m.projectFilter != "" {
-		parts = append(parts, m.styles.Highlight.Render(" | Project: "+m.projectFilter))
+		parts = append(parts, m.Styles.Highlight.Render(" | Project: "+m.projectFilter))
 	}
 	if m.searchQuery != "" {
-		parts = append(parts, m.styles.Highlight.Render(" | Search: "+m.searchQuery))
+		parts = append(parts, m.Styles.Highlight.Render(" | Search: "+m.searchQuery))
 	}
 
-	return m.styles.TopBar.Width(m.width).Render(strings.Join(parts, ""))
+	return m.Styles.TopBar.Width(m.width).Render(strings.Join(parts, ""))
 }
 
 func (m Model) renderBottomBar() string {
@@ -73,35 +70,33 @@ func (m Model) renderBottomBar() string {
 
 	switch m.mode {
 	case ModeSearch:
-		content = m.styles.SearchPrompt.Render("/ ") + m.searchInput.View()
+		content = m.Styles.SearchPrompt.Render("/ ") + m.searchInput.View()
 	case ModeProjectFilter:
-		content = m.styles.Highlight.Render("Select project: up/down to navigate, Enter to select, Esc to cancel")
+		content = m.Styles.Highlight.Render("Select project: up/down to navigate, Enter to select, Esc to cancel")
 	case ModeConfirmDelete:
-		content = m.styles.Highlight.Render("Delete this session? (y/n)")
+		content = m.Styles.Highlight.Render("Delete this session? (y/n)")
 	default:
-		content = m.styles.HelpText.Render(HelpString(m.keys, m.focusedPanel, false))
+		content = m.Styles.HelpText.Render(ui.HelpString(m.Keys, m.focusedPanel, false))
 	}
 
 	if m.statusMessage != "" {
-		content = m.styles.Highlight.Foreground(ColorError).Render(m.statusMessage) + "  " + content
+		content = m.Styles.Highlight.Foreground(ui.ColorError).Render(m.statusMessage) + "  " + content
 	}
 
-	return m.styles.BottomBar.Width(m.width).Render(content)
+	return m.Styles.BottomBar.Width(m.width).Render(content)
 }
 
-// --- Sessions Panel ---
-
 func (m Model) renderSessionList(width, height int) string {
-	focused := m.focusedPanel == PanelSessions
+	focused := m.focusedPanel == ui.PanelSessions
 
 	title := fmt.Sprintf("Sessions (%d)", len(m.sessions))
 	if m.sessionList != nil && len(m.sessions) != len(m.sessionList.Sessions) {
 		title = fmt.Sprintf("Sessions (%d/%d)", len(m.sessions), len(m.sessionList.Sessions))
 	}
 
-	titleStyle := m.styles.PanelTitle
+	titleStyle := m.Styles.PanelTitle
 	if focused {
-		titleStyle = m.styles.PanelTitleActive
+		titleStyle = m.Styles.PanelTitleActive
 	}
 
 	var content strings.Builder
@@ -110,12 +105,12 @@ func (m Model) renderSessionList(width, height int) string {
 	if m.mode == ModeProjectFilter {
 		content.WriteString(m.renderProjectFilter(width-4, innerHeight))
 	} else if len(m.sessions) == 0 {
-		content.WriteString(m.styles.Dim.Render("\n  No sessions found\n"))
+		content.WriteString(m.Styles.Dim.Render("\n  No sessions found\n"))
 		if m.searchQuery != "" || m.projectFilter != "" {
-			content.WriteString(m.styles.Dim.Render("  Press Esc to clear filters\n"))
+			content.WriteString(m.Styles.Dim.Render("  Press Esc to clear filters\n"))
 		} else {
-			content.WriteString(m.styles.Dim.Render("  Sessions appear after using\n"))
-			content.WriteString(m.styles.Dim.Render("  the claude CLI\n"))
+			content.WriteString(m.Styles.Dim.Render("  Sessions appear after using\n"))
+			content.WriteString(m.Styles.Dim.Render("  the claude CLI\n"))
 		}
 	} else {
 		visible := m.sessions[m.sessionOffset:]
@@ -123,9 +118,9 @@ func (m Model) renderSessionList(width, height int) string {
 			visible = visible[:innerHeight]
 		}
 
-		for i, session := range visible {
+		for i, s := range visible {
 			idx := m.sessionOffset + i
-			line := m.renderSessionItem(session, width-4, idx == m.sessionCursor)
+			line := m.renderSessionItem(s, width-4, idx == m.sessionCursor)
 			content.WriteString(line)
 			content.WriteString("\n")
 		}
@@ -135,39 +130,39 @@ func (m Model) renderSessionList(width, height int) string {
 				m.sessionOffset+1,
 				min(m.sessionOffset+innerHeight, len(m.sessions)),
 				len(m.sessions))
-			content.WriteString(m.styles.Dim.Render(info))
+			content.WriteString(m.Styles.Dim.Render(info))
 		}
 	}
 
-	panel := m.styles.PanelStyle(focused, width-2, height-2)
+	panel := m.Styles.PanelStyle(focused, width-2, height-2)
 	return panel.Render(titleStyle.Render(title) + "\n" + content.String())
 }
 
-func (m Model) renderSessionItem(session *Session, width int, selected bool) string {
-	style := m.styles.SessionItem
+func (m Model) renderSessionItem(s *session.Session, width int, selected bool) string {
+	style := m.Styles.SessionItem
 	if selected {
-		style = m.styles.SessionItemSelected
+		style = m.Styles.SessionItemSelected
 	}
 
-	age := GetSessionAge(session.LastActivity)
-	dot := m.styles.SessionDotStyle(age).Render("*")
+	age := ui.GetSessionAge(s.LastActivity)
+	dot := m.Styles.SessionDotStyle(age).Render("*")
 
-	projectName := session.ProjectName
+	projectName := s.ProjectName
 	if len(projectName) > 15 {
 		projectName = projectName[:12] + "..."
 	}
 
-	sessionID := session.ID
+	sessionID := s.ID
 	if len(sessionID) > 8 {
 		sessionID = sessionID[:8]
 	}
 
 	line := fmt.Sprintf("%s %s %s %s %d msgs",
 		dot,
-		m.styles.SessionProject.Render(projectName),
-		m.styles.SessionTime.Render(FormatTimeAgo(session.LastActivity)),
-		m.styles.SessionID.Render(sessionID),
-		session.MessageCount)
+		m.Styles.SessionProject.Render(projectName),
+		m.Styles.SessionTime.Render(ui.FormatTimeAgo(s.LastActivity)),
+		m.Styles.SessionID.Render(sessionID),
+		s.MessageCount)
 
 	if lipgloss.Width(line) > width {
 		line = truncateString(line, width)
@@ -187,9 +182,9 @@ func (m Model) renderProjectFilter(width, height int) string {
 
 	allProjects := prefix + "All Projects"
 	if m.projectFilter == "" && m.projectCursor == 0 {
-		b.WriteString(m.styles.Highlight.Render(allProjects))
+		b.WriteString(m.Styles.Highlight.Render(allProjects))
 	} else {
-		b.WriteString(m.styles.Dim.Render(allProjects))
+		b.WriteString(m.Styles.Dim.Render(allProjects))
 	}
 	b.WriteString("\n")
 
@@ -201,16 +196,16 @@ func (m Model) renderProjectFilter(width, height int) string {
 
 		var line string
 		if project == m.projectFilter {
-			line = m.styles.Highlight.Render(prefix + project)
+			line = m.Styles.Highlight.Render(prefix + project)
 		} else if i+1 == m.projectCursor {
-			line = m.styles.Bold.Render(prefix + project)
+			line = m.Styles.Bold.Render(prefix + project)
 		} else {
 			line = prefix + project
 		}
 		b.WriteString(line + "\n")
 
 		if i >= height-3 {
-			b.WriteString(m.styles.Dim.Render(fmt.Sprintf("  ... and %d more", len(m.projects)-i-1)))
+			b.WriteString(m.Styles.Dim.Render(fmt.Sprintf("  ... and %d more", len(m.projects)-i-1)))
 			break
 		}
 	}
@@ -218,19 +213,17 @@ func (m Model) renderProjectFilter(width, height int) string {
 	return b.String()
 }
 
-// --- Chat Panel ---
-
 func (m Model) renderChatView(width, height int) string {
-	focused := m.focusedPanel == PanelChat
+	focused := m.focusedPanel == ui.PanelChat
 
 	title := "Chat"
 	if m.selectedSession != nil {
 		title = fmt.Sprintf("Chat - %s", m.selectedSession.ProjectName)
 	}
 
-	titleStyle := m.styles.PanelTitle
+	titleStyle := m.Styles.PanelTitle
 	if focused {
-		titleStyle = m.styles.PanelTitleActive
+		titleStyle = m.Styles.PanelTitleActive
 	}
 
 	var content strings.Builder
@@ -238,9 +231,9 @@ func (m Model) renderChatView(width, height int) string {
 	innerHeight := height - 4
 
 	if m.selectedSession == nil {
-		content.WriteString(m.styles.Dim.Render("\n  Select a session to view\n"))
+		content.WriteString(m.Styles.Dim.Render("\n  Select a session to view\n"))
 	} else if !m.selectedSession.MessagesLoaded {
-		content.WriteString(m.styles.Dim.Render("\n  Loading messages...\n"))
+		content.WriteString(m.Styles.Dim.Render("\n  Loading messages...\n"))
 	} else {
 		lines := m.renderMessages(innerWidth)
 
@@ -264,11 +257,11 @@ func (m Model) renderChatView(width, height int) string {
 			if len(lines)-innerHeight > 0 {
 				pct = m.chatScroll * 100 / (len(lines) - innerHeight)
 			}
-			content.WriteString("\n" + m.styles.Dim.Render(fmt.Sprintf(" [%d%%]", pct)))
+			content.WriteString("\n" + m.Styles.Dim.Render(fmt.Sprintf(" [%d%%]", pct)))
 		}
 	}
 
-	panel := m.styles.PanelStyle(focused, width-2, height-2)
+	panel := m.Styles.PanelStyle(focused, width-2, height-2)
 	return panel.Render(titleStyle.Render(title) + "\n" + content.String())
 }
 
@@ -287,42 +280,42 @@ func (m Model) renderMessages(width int) []string {
 		}
 
 		switch msg.Type {
-		case MessageTypeHuman:
-			lines = append(lines, m.styles.HumanPrefix.Render("You > "))
+		case session.MessageTypeHuman:
+			lines = append(lines, m.Styles.HumanPrefix.Render("You > "))
 			msgLines := wrapText(msg.Content, width-2)
 			if len(msgLines) > maxLinesPerMessage {
 				for _, line := range msgLines[:maxLinesPerMessage-1] {
-					lines = append(lines, "  "+m.styles.HumanMessage.Render(line))
+					lines = append(lines, "  "+m.Styles.HumanMessage.Render(line))
 				}
-				lines = append(lines, "  "+m.styles.Dim.Render(fmt.Sprintf("... (%d more lines)", len(msgLines)-maxLinesPerMessage+1)))
+				lines = append(lines, "  "+m.Styles.Dim.Render(fmt.Sprintf("... (%d more lines)", len(msgLines)-maxLinesPerMessage+1)))
 			} else {
 				for _, line := range msgLines {
-					lines = append(lines, "  "+m.styles.HumanMessage.Render(line))
+					lines = append(lines, "  "+m.Styles.HumanMessage.Render(line))
 				}
 			}
 			lines = append(lines, "")
 
-		case MessageTypeAssistant:
-			lines = append(lines, m.styles.AssistantPrefix.Render("Claude > "))
+		case session.MessageTypeAssistant:
+			lines = append(lines, m.Styles.AssistantPrefix.Render("Claude > "))
 			msgLines := wrapText(msg.Content, width-2)
 			if len(msgLines) > maxLinesPerMessage {
 				for _, line := range msgLines[:maxLinesPerMessage-1] {
-					lines = append(lines, "  "+m.styles.AssistantMessage.Render(line))
+					lines = append(lines, "  "+m.Styles.AssistantMessage.Render(line))
 				}
-				lines = append(lines, "  "+m.styles.Dim.Render(fmt.Sprintf("... (%d more lines)", len(msgLines)-maxLinesPerMessage+1)))
+				lines = append(lines, "  "+m.Styles.Dim.Render(fmt.Sprintf("... (%d more lines)", len(msgLines)-maxLinesPerMessage+1)))
 			} else {
 				for _, line := range msgLines {
-					lines = append(lines, "  "+m.styles.AssistantMessage.Render(line))
+					lines = append(lines, "  "+m.Styles.AssistantMessage.Render(line))
 				}
 			}
 			lines = append(lines, "")
 
-		case MessageTypeToolUse:
-			lines = append(lines, "  "+m.styles.ToolUse.Render(FormatToolUseOneLiner(msg)))
+		case session.MessageTypeToolUse:
+			lines = append(lines, "  "+m.Styles.ToolUse.Render(session.FormatToolUse(msg)))
 
-		case MessageTypeSystem:
+		case session.MessageTypeSystem:
 			if msg.Content != "" {
-				lines = append(lines, m.styles.SystemMessage.Render("  [system] "+truncateString(msg.Content, width-12)))
+				lines = append(lines, m.Styles.SystemMessage.Render("  [system] "+truncateString(msg.Content, width-12)))
 			}
 		}
 	}
@@ -330,29 +323,27 @@ func (m Model) renderMessages(width int) []string {
 	return lines
 }
 
-// --- Files Panel ---
-
 func (m Model) renderFilesPanel(width, height int) string {
-	focused := m.focusedPanel == PanelFiles
+	focused := m.focusedPanel == ui.PanelFiles
 
 	fileCount := 0
 	if m.fileTree != nil {
-		fileCount = CountFiles(m.fileTree)
+		fileCount = ui.CountFiles(m.fileTree)
 	}
 	title := fmt.Sprintf("Files (%d)", fileCount)
 
-	titleStyle := m.styles.PanelTitle
+	titleStyle := m.Styles.PanelTitle
 	if focused {
-		titleStyle = m.styles.PanelTitleActive
+		titleStyle = m.Styles.PanelTitleActive
 	}
 
 	var content strings.Builder
 	innerHeight := height - 6
 
 	if m.selectedSession == nil {
-		content.WriteString(m.styles.Dim.Render("\n  No session selected\n"))
+		content.WriteString(m.Styles.Dim.Render("\n  No session selected\n"))
 	} else if len(m.fileLines) == 0 {
-		content.WriteString(m.styles.Dim.Render("\n  No file changes\n"))
+		content.WriteString(m.Styles.Dim.Render("\n  No file changes\n"))
 	} else {
 		start := m.filesScroll
 		if start >= len(m.fileLines) {
@@ -374,7 +365,7 @@ func (m Model) renderFilesPanel(width, height int) string {
 
 	if len(m.toolUsage) > 0 {
 		content.WriteString("\n")
-		content.WriteString(m.styles.Dim.Render(strings.Repeat("-", width-6) + "\n"))
+		content.WriteString(m.Styles.Dim.Render(strings.Repeat("-", width-6) + "\n"))
 
 		var toolParts []string
 		for tool, count := range m.toolUsage {
@@ -384,32 +375,32 @@ func (m Model) renderFilesPanel(width, height int) string {
 		if len(summary) > width-4 {
 			summary = summary[:width-7] + "..."
 		}
-		content.WriteString(m.styles.Dim.Render(summary))
+		content.WriteString(m.Styles.Dim.Render(summary))
 	}
 
-	panel := m.styles.PanelStyle(focused, width-2, height-2)
+	panel := m.Styles.PanelStyle(focused, width-2, height-2)
 	return panel.Render(titleStyle.Render(title) + "\n" + content.String())
 }
 
 func (m Model) colorFileTreeLine(line string, width int) string {
 	if strings.Contains(line, "[created]") {
-		line = strings.Replace(line, "[created]", m.styles.FileCreated.Render("[created]"), 1)
+		line = strings.Replace(line, "[created]", m.Styles.FileCreated.Render("[created]"), 1)
 	}
 	if strings.Contains(line, "[edited") {
 		start := strings.Index(line, "[edited")
 		if start >= 0 {
 			end := strings.Index(line[start:], "]") + start + 1
 			edited := line[start:end]
-			line = line[:start] + m.styles.FileEdited.Render(edited) + line[end:]
+			line = line[:start] + m.Styles.FileEdited.Render(edited) + line[end:]
 		}
 	}
 	if strings.Contains(line, "[deleted]") {
-		line = strings.Replace(line, "[deleted]", m.styles.FileDeleted.Render("[deleted]"), 1)
+		line = strings.Replace(line, "[deleted]", m.Styles.FileDeleted.Render("[deleted]"), 1)
 	}
 
 	for _, branch := range []string{"├──", "└──", "│", "───"} {
 		if strings.Contains(line, branch) {
-			line = strings.Replace(line, branch, m.styles.TreeBranch.Render(branch), 1)
+			line = strings.Replace(line, branch, m.Styles.TreeBranch.Render(branch), 1)
 		}
 	}
 
@@ -420,10 +411,8 @@ func (m Model) colorFileTreeLine(line string, width int) string {
 	return line
 }
 
-// --- Help Overlay ---
-
 func (m Model) renderHelp() string {
-	helpText := FullHelpText()
+	helpText := ui.FullHelpText()
 
 	helpWidth := 65
 	helpHeight := strings.Count(helpText, "\n") + 1
@@ -446,14 +435,12 @@ func (m Model) renderHelp() string {
 
 	for _, line := range strings.Split(helpText, "\n") {
 		b.WriteString(strings.Repeat(" ", x))
-		b.WriteString(m.styles.Bold.Foreground(ColorPrimary).Render(line))
+		b.WriteString(m.Styles.Bold.Foreground(ui.ColorPrimary).Render(line))
 		b.WriteString("\n")
 	}
 
 	return b.String()
 }
-
-// --- Helpers ---
 
 func wrapText(text string, width int) []string {
 	if width <= 0 {

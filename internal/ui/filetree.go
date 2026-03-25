@@ -1,13 +1,12 @@
-/*
-File tree builder for visualizing file changes in a session.
-Constructs a hierarchical view of files touched by tool operations.
-*/
-package main
+package ui
 
 import (
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+
+	"ccmanager/internal/session"
 )
 
 type FileNode struct {
@@ -19,7 +18,7 @@ type FileNode struct {
 	Children  []*FileNode
 }
 
-func BuildFileTree(changes []FileChange) *FileNode {
+func BuildFileTree(changes []session.FileChange) *FileNode {
 	root := &FileNode{
 		Name:     ".",
 		IsDir:    true,
@@ -34,7 +33,7 @@ func BuildFileTree(changes []FileChange) *FileNode {
 	return root
 }
 
-func addToTree(root *FileNode, change FileChange) {
+func addToTree(root *FileNode, change session.FileChange) {
 	path := change.Path
 	if strings.HasPrefix(path, "/") {
 		path = makeRelative(path)
@@ -138,7 +137,7 @@ func renderNode(node *FileNode, prefix string, isLast bool, lines *[]string, max
 			case "edited":
 				if node.Count > 1 {
 					line.WriteString("[edited x")
-					line.WriteString(formatInt(node.Count))
+					line.WriteString(strconv.Itoa(node.Count))
 					line.WriteString("]")
 				} else {
 					line.WriteString("[edited]")
@@ -164,7 +163,7 @@ func renderNode(node *FileNode, prefix string, isLast bool, lines *[]string, max
 		if maxLines > 0 && len(*lines) >= maxLines {
 			remaining := len(node.Children) - i
 			if remaining > 0 {
-				*lines = append(*lines, newPrefix+"... and "+formatInt(remaining)+" more")
+				*lines = append(*lines, newPrefix+"... and "+strconv.Itoa(remaining)+" more")
 			}
 			return
 		}
@@ -188,33 +187,6 @@ func countFilesRecursive(node *FileNode, count *int) {
 	}
 }
 
-func FlattenTree(root *FileNode) []string {
-	var paths []string
-	flattenRecursive(root, &paths)
-	return paths
-}
-
-func flattenRecursive(node *FileNode, paths *[]string) {
-	if !node.IsDir && node.Path != "" {
-		*paths = append(*paths, node.Path)
-	}
-	for _, child := range node.Children {
-		flattenRecursive(child, paths)
-	}
-}
-
 func GetFileExtension(path string) string {
 	return strings.TrimPrefix(filepath.Ext(path), ".")
-}
-
-func GroupByExtension(changes []FileChange) map[string][]FileChange {
-	groups := make(map[string][]FileChange)
-	for _, change := range changes {
-		ext := GetFileExtension(change.Path)
-		if ext == "" {
-			ext = "(no ext)"
-		}
-		groups[ext] = append(groups[ext], change)
-	}
-	return groups
 }

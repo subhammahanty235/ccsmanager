@@ -1,107 +1,27 @@
-/*
-Application state and update logic for the Bubbletea TUI framework.
-Manages panel focus, session selection, search/filter state, and keyboard input.
-*/
-package main
+package app
 
 import (
+	"ccmanager/internal/session"
+	"ccmanager/internal/ui"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Panel identifies which panel has focus.
-type Panel int
-
-const (
-	PanelSessions Panel = iota
-	PanelChat
-	PanelFiles
-)
-
-// Mode represents the current interaction mode.
-type Mode int
-
-const (
-	ModeNormal Mode = iota
-	ModeSearch
-	ModeProjectFilter
-	ModeConfirmDelete
-	ModeHelp
-)
-
-// Model holds all application state.
-type Model struct {
-	width  int
-	height int
-
-	sessionList     *SessionList
-	sessions        []*Session
-	selectedSession *Session
-	projects        []string
-
-	focusedPanel  Panel
-	sessionCursor int
-	sessionOffset int
-	chatScroll    int
-	filesScroll   int
-	projectCursor int
-
-	mode          Mode
-	searchInput   textinput.Model
-	searchQuery   string
-	projectFilter string
-
-	styles Styles
-	keys   KeyMap
-
-	fileTree  *FileNode
-	fileLines []string
-	toolUsage map[string]int
-
-	statusMessage string
-}
-
-// NewModel creates an initialized Model ready for use.
-func NewModel() Model {
-	ti := textinput.New()
-	ti.Placeholder = "Search sessions..."
-	ti.CharLimit = 100
-	ti.Width = 40
-
-	return Model{
-		styles:       DefaultStyles(),
-		keys:         DefaultKeyMap(),
-		searchInput:  ti,
-		sessions:     make([]*Session, 0),
-		projects:     make([]string, 0),
-		focusedPanel: PanelSessions,
-		mode:         ModeNormal,
-	}
-}
-
-func (m Model) Init() tea.Cmd {
-	return tea.Batch(scanSessionsCmd(), tea.EnterAltScreen)
-}
-
-// --- Messages ---
-
-type sessionsLoadedMsg struct{ list *SessionList }
-type sessionSelectedMsg struct{ session *Session }
+type sessionsLoadedMsg struct{ list *session.SessionList }
 type errMsg struct{ err error }
 type resumeFinishedMsg struct{}
 
 func scanSessionsCmd() tea.Cmd {
 	return func() tea.Msg {
-		list, err := ScanSessions()
+		list, err := session.Scan()
 		if err != nil {
 			return errMsg{err}
 		}
 		return sessionsLoadedMsg{list}
 	}
 }
-
-// --- Update ---
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -114,16 +34,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionsLoadedMsg:
 		m.sessionList = msg.list
 		m.sessions = msg.list.Sessions
-		m.projects = GetUniqueProjects(msg.list.Sessions)
+		m.projects = session.GetUniqueProjects(msg.list.Sessions)
 		if len(m.sessions) > 0 {
 			m.selectSession(0)
 		}
-		return m, nil
-
-	case sessionSelectedMsg:
-		m.selectedSession = msg.session
-		m.rebuildFileTree()
-		m.chatScroll = 0
 		return m, nil
 
 	case errMsg:
@@ -146,10 +60,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// --- Key Handling ---
-
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Mode-specific handlers
 	switch m.mode {
 	case ModeHelp:
 		m.mode = ModeNormal
@@ -165,26 +76,25 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleProjectFilter(msg)
 	}
 
-	// Normal mode
 	switch {
-	case key.Matches(msg, m.keys.Quit):
+	case key.Matches(msg, m.Keys.Quit):
 		return m, tea.Quit
 
-	case key.Matches(msg, m.keys.Help):
+	case key.Matches(msg, m.Keys.Help):
 		m.mode = ModeHelp
 		return m, nil
 
-	case key.Matches(msg, m.keys.Search):
+	case key.Matches(msg, m.Keys.Search):
 		m.mode = ModeSearch
 		m.searchInput.Focus()
 		return m, textinput.Blink
 
-	case key.Matches(msg, m.keys.Filter):
+	case key.Matches(msg, m.Keys.Filter):
 		m.mode = ModeProjectFilter
 		m.projectCursor = 0
 		return m, nil
 
-	case key.Matches(msg, m.keys.Escape):
+	case key.Matches(msg, m.Keys.Escape):
 		if m.searchQuery != "" || m.projectFilter != "" {
 			m.searchQuery = ""
 			m.projectFilter = ""
@@ -193,37 +103,36 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.NextPanel):
+	case key.Matches(msg, m.Keys.NextPanel):
 		m.focusedPanel = (m.focusedPanel + 1) % 3
 		return m, nil
 
-	case key.Matches(msg, m.keys.PrevPanel):
+	case key.Matches(msg, m.Keys.PrevPanel):
 		m.focusedPanel = (m.focusedPanel + 2) % 3
 		return m, nil
 
-	case key.Matches(msg, m.keys.Resume):
+	case key.Matches(msg, m.Keys.Resume):
 		if m.selectedSession != nil {
-			cmd := ResumeCommand(m.selectedSession)
+			cmd := session.ResumeCommand(m.selectedSession)
 			return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
 				return resumeFinishedMsg{}
 			})
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.Delete):
-		if m.selectedSession != nil && m.focusedPanel == PanelSessions {
+	case key.Matches(msg, m.Keys.Delete):
+		if m.selectedSession != nil && m.focusedPanel == ui.PanelSessions {
 			m.mode = ModeConfirmDelete
 		}
 		return m, nil
 	}
 
-	// Panel-specific navigation
 	switch m.focusedPanel {
-	case PanelSessions:
+	case ui.PanelSessions:
 		return m.handleSessionNav(msg)
-	case PanelChat:
+	case ui.PanelChat:
 		return m.handleChatNav(msg)
-	case PanelFiles:
+	case ui.PanelFiles:
 		return m.handleFilesNav(msg)
 	}
 
@@ -232,13 +141,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleConfirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.keys.Confirm):
+	case key.Matches(msg, m.Keys.Confirm):
 		if m.selectedSession != nil {
-			DeleteSession(m.selectedSession)
+			session.Delete(m.selectedSession)
 			m.mode = ModeNormal
 			return m, scanSessionsCmd()
 		}
-	case key.Matches(msg, m.keys.Cancel), key.Matches(msg, m.keys.Escape):
+	case key.Matches(msg, m.Keys.Cancel), key.Matches(msg, m.Keys.Escape):
 		m.mode = ModeNormal
 	}
 	return m, nil
@@ -246,13 +155,13 @@ func (m Model) handleConfirmDelete(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.keys.Escape):
+	case key.Matches(msg, m.Keys.Escape):
 		m.mode = ModeNormal
 		m.searchInput.SetValue("")
 		m.searchQuery = ""
 		m.applyFilters()
 
-	case key.Matches(msg, m.keys.Select):
+	case key.Matches(msg, m.Keys.Select):
 		m.mode = ModeNormal
 		m.searchQuery = m.searchInput.Value()
 		m.applyFilters()
@@ -270,20 +179,20 @@ func (m Model) handleSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleProjectFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.keys.Escape):
+	case key.Matches(msg, m.Keys.Escape):
 		m.mode = ModeNormal
 
-	case key.Matches(msg, m.keys.Up):
+	case key.Matches(msg, m.Keys.Up):
 		if m.projectCursor > 0 {
 			m.projectCursor--
 		}
 
-	case key.Matches(msg, m.keys.Down):
+	case key.Matches(msg, m.Keys.Down):
 		if m.projectCursor < len(m.projects) {
 			m.projectCursor++
 		}
 
-	case key.Matches(msg, m.keys.Select):
+	case key.Matches(msg, m.Keys.Select):
 		if m.projectCursor == 0 {
 			m.projectFilter = ""
 		} else if m.projectCursor <= len(m.projects) {
@@ -295,13 +204,11 @@ func (m Model) handleProjectFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// --- Panel Navigation ---
-
 func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	visibleHeight := m.sessionListHeight()
+	visibleHeight := m.SessionListHeight()
 
 	switch {
-	case key.Matches(msg, m.keys.Up):
+	case key.Matches(msg, m.Keys.Up):
 		if m.sessionCursor > 0 {
 			m.sessionCursor--
 			if m.sessionCursor < m.sessionOffset {
@@ -310,7 +217,7 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectSession(m.sessionCursor)
 		}
 
-	case key.Matches(msg, m.keys.Down):
+	case key.Matches(msg, m.Keys.Down):
 		if m.sessionCursor < len(m.sessions)-1 {
 			m.sessionCursor++
 			if m.sessionCursor >= m.sessionOffset+visibleHeight {
@@ -319,14 +226,14 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectSession(m.sessionCursor)
 		}
 
-	case key.Matches(msg, m.keys.Top):
+	case key.Matches(msg, m.Keys.Top):
 		m.sessionCursor = 0
 		m.sessionOffset = 0
 		if len(m.sessions) > 0 {
 			m.selectSession(0)
 		}
 
-	case key.Matches(msg, m.keys.Bottom):
+	case key.Matches(msg, m.Keys.Bottom):
 		if len(m.sessions) > 0 {
 			m.sessionCursor = len(m.sessions) - 1
 			if m.sessionCursor >= visibleHeight {
@@ -335,13 +242,13 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectSession(m.sessionCursor)
 		}
 
-	case key.Matches(msg, m.keys.Select):
+	case key.Matches(msg, m.Keys.Select):
 		if m.sessionCursor < len(m.sessions) {
 			m.selectSession(m.sessionCursor)
-			m.focusedPanel = PanelChat
+			m.focusedPanel = ui.PanelChat
 		}
 
-	case key.Matches(msg, m.keys.PageDown):
+	case key.Matches(msg, m.Keys.PageDown):
 		m.sessionCursor += visibleHeight
 		if m.sessionCursor >= len(m.sessions) {
 			m.sessionCursor = len(m.sessions) - 1
@@ -353,7 +260,7 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectSession(m.sessionCursor)
 		}
 
-	case key.Matches(msg, m.keys.PageUp):
+	case key.Matches(msg, m.Keys.PageUp):
 		m.sessionCursor -= visibleHeight
 		if m.sessionCursor < 0 {
 			m.sessionCursor = 0
@@ -372,45 +279,45 @@ func (m Model) handleChatNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	maxScroll := m.maxChatScroll()
-	visibleHeight := m.chatViewHeight()
+	maxScroll := m.MaxChatScroll()
+	visibleHeight := m.ChatViewHeight()
 
 	switch {
-	case key.Matches(msg, m.keys.Up):
+	case key.Matches(msg, m.Keys.Up):
 		if m.chatScroll > 0 {
 			m.chatScroll--
 		}
 
-	case key.Matches(msg, m.keys.Down):
+	case key.Matches(msg, m.Keys.Down):
 		if m.chatScroll < maxScroll {
 			m.chatScroll++
 		}
 
-	case key.Matches(msg, m.keys.HalfUp):
+	case key.Matches(msg, m.Keys.HalfUp):
 		m.chatScroll -= visibleHeight / 2
 		if m.chatScroll < 0 {
 			m.chatScroll = 0
 		}
 
-	case key.Matches(msg, m.keys.HalfDown):
+	case key.Matches(msg, m.Keys.HalfDown):
 		m.chatScroll += visibleHeight / 2
 		if m.chatScroll > maxScroll {
 			m.chatScroll = maxScroll
 		}
 
-	case key.Matches(msg, m.keys.Top):
+	case key.Matches(msg, m.Keys.Top):
 		m.chatScroll = 0
 
-	case key.Matches(msg, m.keys.Bottom):
+	case key.Matches(msg, m.Keys.Bottom):
 		m.chatScroll = maxScroll
 
-	case key.Matches(msg, m.keys.PageUp):
+	case key.Matches(msg, m.Keys.PageUp):
 		m.chatScroll -= visibleHeight
 		if m.chatScroll < 0 {
 			m.chatScroll = 0
 		}
 
-	case key.Matches(msg, m.keys.PageDown):
+	case key.Matches(msg, m.Keys.PageDown):
 		m.chatScroll += visibleHeight
 		if m.chatScroll > maxScroll {
 			m.chatScroll = maxScroll
@@ -425,43 +332,41 @@ func (m Model) handleFilesNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	maxScroll := len(m.fileLines) - m.filesViewHeight()
+	maxScroll := len(m.fileLines) - m.FilesViewHeight()
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
 
 	switch {
-	case key.Matches(msg, m.keys.Up):
+	case key.Matches(msg, m.Keys.Up):
 		if m.filesScroll > 0 {
 			m.filesScroll--
 		}
 
-	case key.Matches(msg, m.keys.Down):
+	case key.Matches(msg, m.Keys.Down):
 		if m.filesScroll < maxScroll {
 			m.filesScroll++
 		}
 
-	case key.Matches(msg, m.keys.Top):
+	case key.Matches(msg, m.Keys.Top):
 		m.filesScroll = 0
 
-	case key.Matches(msg, m.keys.Bottom):
+	case key.Matches(msg, m.Keys.Bottom):
 		m.filesScroll = maxScroll
 	}
 
 	return m, nil
 }
 
-// --- State Mutations ---
-
 func (m *Model) selectSession(index int) {
 	if index < 0 || index >= len(m.sessions) {
 		return
 	}
 
-	session := m.sessions[index]
-	if session != m.selectedSession {
-		m.selectedSession = session
-		LoadSessionMessages(session)
+	s := m.sessions[index]
+	if s != m.selectedSession {
+		m.selectedSession = s
+		session.LoadMessages(s)
 		m.rebuildFileTree()
 		m.chatScroll = 0
 	}
@@ -475,10 +380,10 @@ func (m *Model) rebuildFileTree() {
 		return
 	}
 
-	changes := ExtractFileChanges(m.selectedSession.Messages)
-	m.fileTree = BuildFileTree(changes)
-	m.fileLines = RenderFileTree(m.fileTree, 100)
-	m.toolUsage = CountToolUsage(m.selectedSession.Messages)
+	changes := session.ExtractFileChanges(m.selectedSession.Messages)
+	m.fileTree = ui.BuildFileTree(changes)
+	m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+	m.toolUsage = session.CountToolUsage(m.selectedSession.Messages)
 	m.filesScroll = 0
 }
 
@@ -490,14 +395,13 @@ func (m *Model) applyFilters() {
 	m.sessions = m.sessionList.Sessions
 
 	if m.projectFilter != "" {
-		m.sessions = FilterByProject(m.sessions, m.projectFilter)
+		m.sessions = session.FilterByProject(m.sessions, m.projectFilter)
 	}
 
 	if m.searchQuery != "" {
-		m.sessions = SearchSessions(m.sessions, m.searchQuery)
+		m.sessions = session.Search(m.sessions, m.searchQuery)
 	}
 
-	// Reset cursor bounds
 	if m.sessionCursor >= len(m.sessions) {
 		m.sessionCursor = len(m.sessions) - 1
 	}
@@ -514,43 +418,4 @@ func (m *Model) applyFilters() {
 		m.fileLines = nil
 		m.toolUsage = nil
 	}
-}
-
-// --- Dimension Helpers ---
-
-func (m Model) sessionListHeight() int {
-	return m.height - 6
-}
-
-func (m Model) chatViewHeight() int {
-	return m.height - 6
-}
-
-func (m Model) filesViewHeight() int {
-	return m.height - 8
-}
-
-func (m Model) maxChatScroll() int {
-	if m.selectedSession == nil || !m.selectedSession.MessagesLoaded {
-		return 0
-	}
-
-	totalLines := 0
-	for _, msg := range m.selectedSession.Messages {
-		if msg == nil {
-			continue
-		}
-		switch msg.Type {
-		case MessageTypeHuman, MessageTypeAssistant:
-			totalLines += len(msg.Content)/50 + 2
-		case MessageTypeToolUse:
-			totalLines++
-		}
-	}
-
-	maxScroll := totalLines - m.chatViewHeight()
-	if maxScroll < 0 {
-		return 0
-	}
-	return maxScroll
 }

@@ -3,8 +3,6 @@ ccmanager - A terminal UI for managing Claude Code sessions.
 
 Scans ~/.claude/projects for session history files and provides a three-panel
 interface to browse, view, and resume conversations with the Claude CLI.
-
-Usage: ccmanager
 */
 package main
 
@@ -12,18 +10,21 @@ import (
 	"fmt"
 	"os"
 
+	"ccmanager/internal/app"
+	"ccmanager/internal/claude"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
-	if !CheckClaudeCLI() {
+	if !claude.CLIAvailable() {
 		fmt.Fprintln(os.Stderr, "Warning: 'claude' CLI not found. Resume functionality requires it.")
 		fmt.Fprintln(os.Stderr, "Install from: https://claude.ai/code")
 		fmt.Fprintln(os.Stderr)
 	}
 
 	p := tea.NewProgram(
-		NewModel(),
+		app.NewModel(),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

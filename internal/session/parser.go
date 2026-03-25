@@ -1,40 +1,10 @@
-/*
-JSONL message parsing for Claude Code session files.
-Extracts human messages, assistant responses, and tool usage from the session log format.
-*/
-package main
+package session
 
 import (
 	"encoding/json"
 	"strings"
 	"time"
 )
-
-type MessageType string
-
-const (
-	MessageTypeHuman      MessageType = "human"
-	MessageTypeAssistant  MessageType = "assistant"
-	MessageTypeToolUse    MessageType = "tool_use"
-	MessageTypeToolResult MessageType = "tool_result"
-	MessageTypeSystem     MessageType = "system"
-)
-
-type Message struct {
-	Type       MessageType
-	Content    string
-	Timestamp  time.Time
-	ToolName   string
-	ToolInput  map[string]interface{}
-	ToolOutput string
-	Raw        json.RawMessage
-}
-
-type FileChange struct {
-	Path      string
-	Operation string
-	Count     int
-}
 
 func ParseJSONLLine(line []byte) []*Message {
 	if len(line) == 0 {
@@ -321,7 +291,7 @@ func CountToolUsage(messages []*Message) map[string]int {
 	return counts
 }
 
-func FormatToolUseOneLiner(msg *Message) string {
+func FormatToolUse(msg *Message) string {
 	if msg == nil || msg.Type != MessageTypeToolUse {
 		return ""
 	}

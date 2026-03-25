@@ -1,7 +1,4 @@
-/*
-Keyboard bindings and help text for TUI navigation and actions.
-*/
-package main
+package ui
 
 import "github.com/charmbracelet/bubbles/key"
 
@@ -57,19 +54,13 @@ func DefaultKeyMap() KeyMap {
 	}
 }
 
-func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Select, k.Search, k.Resume, k.Quit, k.Help}
-}
+type Panel int
 
-func (k KeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Up, k.Down, k.PageUp, k.PageDown},
-		{k.HalfUp, k.HalfDown, k.Top, k.Bottom},
-		{k.NextPanel, k.PrevPanel},
-		{k.Select, k.Resume, k.Delete},
-		{k.Search, k.Filter, k.Help, k.Quit},
-	}
-}
+const (
+	PanelSessions Panel = iota
+	PanelChat
+	PanelFiles
+)
 
 func HelpString(keys KeyMap, focused Panel, searchActive bool) string {
 	if searchActive {

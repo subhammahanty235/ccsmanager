@@ -1,8 +1,7 @@
 /*
-Lipgloss styles for the TUI color scheme and component styling.
-Uses a dark theme with green and cyan accents.
+Package ui provides styling and visual components for the TUI.
 */
-package main
+package ui
 
 import "github.com/charmbracelet/lipgloss"
 
