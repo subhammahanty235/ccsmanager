@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"ccmanager/internal/session"
 	"ccmanager/internal/ui"
@@ -15,6 +16,10 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.mode == ModeLoading {
+		return m.renderLoading()
+	}
+
 	if m.mode == ModeHelp {
 		return m.renderHelp()
 	}
@@ -24,7 +29,7 @@ func (m Model) View() string {
 	b.WriteString(m.renderTopBar())
 	b.WriteString("\n")
 
-	panelsHeight := m.height - 4
+	panelsHeight := m.height - 5
 	totalWidth := m.width - 2
 	leftWidth := totalWidth * 30 / 100
 	rightWidth := totalWidth * 25 / 100
@@ -38,7 +43,15 @@ func (m Model) View() string {
 	b.WriteString("\n")
 	b.WriteString(m.renderBottomBar())
 
-	return b.String()
+	content := b.String()
+
+	// Pad with empty lines to fill screen height
+	lines := strings.Count(content, "\n") + 1
+	for i := lines; i < m.height; i++ {
+		content += "\n"
+	}
+
+	return content
 }
 
 func (m Model) renderTopBar() string {
@@ -62,7 +75,9 @@ func (m Model) renderTopBar() string {
 		parts = append(parts, m.Styles.Highlight.Render(" | Search: "+m.searchQuery))
 	}
 
-	return m.Styles.TopBar.Width(m.width).Render(strings.Join(parts, ""))
+	bar := m.Styles.TopBar.Width(m.width).Render(strings.Join(parts, ""))
+	separator := m.Styles.Dim.Render(strings.Repeat("─", m.width))
+	return bar + "\n" + separator
 }
 
 func (m Model) renderBottomBar() string {
@@ -440,6 +455,30 @@ func (m Model) renderHelp() string {
 	}
 
 	return b.String()
+}
+
+func (m Model) renderLoading() string {
+	elapsed := time.Since(m.loadStart).Round(time.Millisecond * 100)
+
+	title := m.Styles.Bold.Foreground(ui.ColorPrimary).Render("Claude Code Manager")
+	spinner := m.spinner.View()
+	message := fmt.Sprintf("%s Scanning sessions... %s", spinner, elapsed)
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ColorPrimary).
+		Padding(2, 4).
+		Render(title + "\n\n" + message)
+
+	content := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+
+	// Ensure full height
+	lines := strings.Count(content, "\n") + 1
+	for i := lines; i < m.height; i++ {
+		content += "\n"
+	}
+
+	return content
 }
 
 func wrapText(text string, width int) []string {

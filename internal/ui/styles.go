@@ -70,8 +70,9 @@ func DefaultStyles() Styles {
 
 		TopBar: lipgloss.NewStyle().
 			Foreground(ColorText).
-			Background(lipgloss.Color("#1a1a1a")).
-			Padding(0, 1),
+			Background(lipgloss.Color("#2a2a3a")).
+			Padding(0, 1).
+			MarginBottom(1),
 
 		BottomBar: lipgloss.NewStyle().
 			Foreground(ColorSubtle).

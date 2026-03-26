@@ -5,6 +5,7 @@ import (
 	"ccmanager/internal/ui"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -31,16 +32,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchInput.Width = m.width/3 - 4
 		return m, nil
 
+	case spinner.TickMsg:
+		if m.mode == ModeLoading {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case sessionsLoadedMsg:
+		m.mode = ModeNormal
 		m.sessionList = msg.list
 		m.sessions = msg.list.Sessions
 		m.projects = session.GetUniqueProjects(msg.list.Sessions)
 		if len(m.sessions) > 0 {
 			m.selectSession(0)
 		}
-		return m, nil
+		return m, tea.ClearScreen
 
 	case errMsg:
+		m.mode = ModeNormal
 		m.statusMessage = "Error: " + msg.err.Error()
 		return m, nil
 
@@ -48,6 +59,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(tea.EnterAltScreen, tea.ClearScreen, scanSessionsCmd())
 
 	case tea.KeyMsg:
+		if m.mode == ModeLoading {
+			if key.Matches(msg, m.Keys.Quit) {
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		return m.handleKey(msg)
 	}
 
@@ -206,6 +223,8 @@ func (m Model) handleProjectFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	visibleHeight := m.SessionListHeight()
+	prevSession := m.selectedSession
+	needsClear := false
 
 	switch {
 	case key.Matches(msg, m.Keys.Up):
@@ -214,7 +233,25 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.sessionCursor < m.sessionOffset {
 				m.sessionOffset = m.sessionCursor
 			}
-			m.selectSession(m.sessionCursor)
+			if m.sessionCursor >= 0 && m.sessionCursor < len(m.sessions) {
+				s := m.sessions[m.sessionCursor]
+				if s != m.selectedSession {
+					m.selectedSession = s
+					session.LoadMessages(s)
+					m.fileTree = nil
+					m.fileLines = nil
+					m.toolUsage = nil
+					if s.MessagesLoaded {
+						changes := session.ExtractFileChanges(s.Messages)
+						m.fileTree = ui.BuildFileTree(changes)
+						m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+						m.toolUsage = session.CountToolUsage(s.Messages)
+					}
+					m.chatScroll = 0
+					m.filesScroll = 0
+					needsClear = true
+				}
+			}
 		}
 
 	case key.Matches(msg, m.Keys.Down):
@@ -223,14 +260,48 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.sessionCursor >= m.sessionOffset+visibleHeight {
 				m.sessionOffset = m.sessionCursor - visibleHeight + 1
 			}
-			m.selectSession(m.sessionCursor)
+			if m.sessionCursor >= 0 && m.sessionCursor < len(m.sessions) {
+				s := m.sessions[m.sessionCursor]
+				if s != m.selectedSession {
+					m.selectedSession = s
+					session.LoadMessages(s)
+					m.fileTree = nil
+					m.fileLines = nil
+					m.toolUsage = nil
+					if s.MessagesLoaded {
+						changes := session.ExtractFileChanges(s.Messages)
+						m.fileTree = ui.BuildFileTree(changes)
+						m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+						m.toolUsage = session.CountToolUsage(s.Messages)
+					}
+					m.chatScroll = 0
+					m.filesScroll = 0
+					needsClear = true
+				}
+			}
 		}
 
 	case key.Matches(msg, m.Keys.Top):
 		m.sessionCursor = 0
 		m.sessionOffset = 0
 		if len(m.sessions) > 0 {
-			m.selectSession(0)
+			s := m.sessions[0]
+			if s != m.selectedSession {
+				m.selectedSession = s
+				session.LoadMessages(s)
+				m.fileTree = nil
+				m.fileLines = nil
+				m.toolUsage = nil
+				if s.MessagesLoaded {
+					changes := session.ExtractFileChanges(s.Messages)
+					m.fileTree = ui.BuildFileTree(changes)
+					m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+					m.toolUsage = session.CountToolUsage(s.Messages)
+				}
+				m.chatScroll = 0
+				m.filesScroll = 0
+				needsClear = true
+			}
 		}
 
 	case key.Matches(msg, m.Keys.Bottom):
@@ -239,12 +310,44 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.sessionCursor >= visibleHeight {
 				m.sessionOffset = m.sessionCursor - visibleHeight + 1
 			}
-			m.selectSession(m.sessionCursor)
+			s := m.sessions[m.sessionCursor]
+			if s != m.selectedSession {
+				m.selectedSession = s
+				session.LoadMessages(s)
+				m.fileTree = nil
+				m.fileLines = nil
+				m.toolUsage = nil
+				if s.MessagesLoaded {
+					changes := session.ExtractFileChanges(s.Messages)
+					m.fileTree = ui.BuildFileTree(changes)
+					m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+					m.toolUsage = session.CountToolUsage(s.Messages)
+				}
+				m.chatScroll = 0
+				m.filesScroll = 0
+				needsClear = true
+			}
 		}
 
 	case key.Matches(msg, m.Keys.Select):
 		if m.sessionCursor < len(m.sessions) {
-			m.selectSession(m.sessionCursor)
+			s := m.sessions[m.sessionCursor]
+			if s != m.selectedSession {
+				m.selectedSession = s
+				session.LoadMessages(s)
+				m.fileTree = nil
+				m.fileLines = nil
+				m.toolUsage = nil
+				if s.MessagesLoaded {
+					changes := session.ExtractFileChanges(s.Messages)
+					m.fileTree = ui.BuildFileTree(changes)
+					m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+					m.toolUsage = session.CountToolUsage(s.Messages)
+				}
+				m.chatScroll = 0
+				m.filesScroll = 0
+				needsClear = true
+			}
 			m.focusedPanel = ui.PanelChat
 		}
 
@@ -257,7 +360,23 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.sessionOffset = m.sessionCursor - visibleHeight + 1
 		}
 		if m.sessionCursor >= 0 && m.sessionCursor < len(m.sessions) {
-			m.selectSession(m.sessionCursor)
+			s := m.sessions[m.sessionCursor]
+			if s != m.selectedSession {
+				m.selectedSession = s
+				session.LoadMessages(s)
+				m.fileTree = nil
+				m.fileLines = nil
+				m.toolUsage = nil
+				if s.MessagesLoaded {
+					changes := session.ExtractFileChanges(s.Messages)
+					m.fileTree = ui.BuildFileTree(changes)
+					m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+					m.toolUsage = session.CountToolUsage(s.Messages)
+				}
+				m.chatScroll = 0
+				m.filesScroll = 0
+				needsClear = true
+			}
 		}
 
 	case key.Matches(msg, m.Keys.PageUp):
@@ -268,9 +387,31 @@ func (m Model) handleSessionNav(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.sessionCursor < m.sessionOffset {
 			m.sessionOffset = m.sessionCursor
 		}
-		m.selectSession(m.sessionCursor)
+		if m.sessionCursor >= 0 && m.sessionCursor < len(m.sessions) {
+			s := m.sessions[m.sessionCursor]
+			if s != m.selectedSession {
+				m.selectedSession = s
+				session.LoadMessages(s)
+				m.fileTree = nil
+				m.fileLines = nil
+				m.toolUsage = nil
+				if s.MessagesLoaded {
+					changes := session.ExtractFileChanges(s.Messages)
+					m.fileTree = ui.BuildFileTree(changes)
+					m.fileLines = ui.RenderFileTree(m.fileTree, 100)
+					m.toolUsage = session.CountToolUsage(s.Messages)
+				}
+				m.chatScroll = 0
+				m.filesScroll = 0
+				needsClear = true
+			}
+		}
 	}
 
+	_ = prevSession // suppress unused warning
+	if needsClear {
+		return m, tea.ClearScreen
+	}
 	return m, nil
 }
 
