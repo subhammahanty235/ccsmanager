@@ -1,6 +1,6 @@
-# Binary
-ccsmanager
-ccmanager
+# Binary (only in root)
+/ccsmanager
+/ccmanager
 
 # OS files
 .DS_Store
