@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"ccmanager/internal/claude"
+	"github.com/subhammahanty235/ccsmanager/internal/claude"
 )
 
 func Scan() (*SessionList, error) {

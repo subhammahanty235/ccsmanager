@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ccmanager/internal/session"
+	"github.com/subhammahanty235/ccsmanager/internal/session"
 )
 
 type FileNode struct {

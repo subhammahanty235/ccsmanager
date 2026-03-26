@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"ccmanager/internal/session"
-	"ccmanager/internal/ui"
+	"github.com/subhammahanty235/ccsmanager/internal/session"
+	"github.com/subhammahanty235/ccsmanager/internal/ui"
 
 	"github.com/charmbracelet/lipgloss"
 )
