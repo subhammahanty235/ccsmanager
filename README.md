@@ -1,4 +1,4 @@
-# ccmanager
+# ccsmanager
 
 A terminal UI for browsing and resuming Claude Code sessions.
 
@@ -23,7 +23,7 @@ Claude Code stores conversation history in `~/.claude/projects/` as JSONL files.
 - Search across sessions by project or content
 - Clean up old sessions you no longer need
 
-ccmanager gives you a visual interface to manage these sessions without digging through files manually.
+ccsmanager gives you a visual interface to manage these sessions without digging through files manually.
 
 ## Features
 
@@ -39,8 +39,8 @@ ccmanager gives you a visual interface to manage these sessions without digging 
 
 ```bash
 git clone <repo>
-cd ccmanager
-go build -o ccmanager ./cmd/ccmanager
+cd ccsmanager
+go build -o ccsmanager ./cmd/ccsmanager
 ```
 
 Requires Go 1.21+ and the `claude` CLI installed.
@@ -48,7 +48,7 @@ Requires Go 1.21+ and the `claude` CLI installed.
 ## Usage
 
 ```bash
-./ccmanager
+./ccsmanager
 ```
 
 ### Keyboard Shortcuts
@@ -70,9 +70,9 @@ Requires Go 1.21+ and the `claude` CLI installed.
 ## Project Structure
 
 ```
-ccmanager/
+ccsmanager/
 ├── cmd/
-│   └── ccmanager/
+│   └── ccsmanager/
 │       └── main.go           # Entry point
 ├── internal/
 │   ├── app/
@@ -102,7 +102,7 @@ ccmanager/
 3. **Displays** sessions sorted by last activity
 4. **Resumes** sessions by calling `claude --resume <session-id>`
 
-The session files are read-only - ccmanager never modifies your conversation history (except when you explicitly delete a session).
+The session files are read-only - ccsmanager never modifies your conversation history (except when you explicitly delete a session).
 
 ## Dependencies
 
