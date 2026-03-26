@@ -1,5 +1,7 @@
 # ccsmanager
 
+> **v1: May contain some bugs**
+
 A terminal UI for browsing and resuming Claude Code sessions.
 
 ```
@@ -35,20 +37,57 @@ ccsmanager gives you a visual interface to manage these sessions without digging
 - **File tree** - See which files were touched in each session
 - **Tool usage stats** - Count of Read, Edit, Write, Bash operations
 
-## Install
+## Installation
+
+### Prerequisites
+
+- **Go 1.21+** - [Install Go](https://go.dev/doc/install)
+- **Claude CLI** - [Install Claude Code](https://claude.ai/code)
+
+### Option 1: Install via Go (Recommended)
 
 ```bash
-git clone <repo>
-cd ccsmanager
-go build -o ccsmanager ./cmd/ccsmanager
+go install github.com/subhammahanty235/ccsmanager/cmd/ccsmanager@latest
 ```
 
-Requires Go 1.21+ and the `claude` CLI installed.
+After installation, add Go bin to your PATH if not already done:
+
+```bash
+# Add this line to your ~/.zshrc or ~/.bashrc
+export PATH="$PATH:$HOME/go/bin"
+
+# Then reload your shell
+source ~/.zshrc   # or source ~/.bashrc
+```
+
+Now you can run `ccsmanager` from anywhere!
+
+### Option 2: Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/subhammahanty235/ccsmanager.git
+cd ccsmanager
+
+# Build the binary
+go build -o ccsmanager ./cmd/ccsmanager
+
+# Run it
+./ccsmanager
+```
+
+### Verify Installation
+
+```bash
+ccsmanager
+```
+
+If you see the TUI interface, you're all set!
 
 ## Usage
 
 ```bash
-./ccsmanager
+ccsmanager
 ```
 
 ### Keyboard Shortcuts
@@ -66,6 +105,15 @@ Requires Go 1.21+ and the `claude` CLI installed.
 | `Ctrl+u/d` | Half-page scroll |
 | `?` | Show help |
 | `q` | Quit |
+
+## How It Works
+
+1. **Scans** `~/.claude/projects/` for JSONL session files
+2. **Parses** each file to extract timestamps, messages, and tool usage
+3. **Displays** sessions sorted by last activity
+4. **Resumes** sessions by calling `claude --resume <session-id>`
+
+The session files are read-only - ccsmanager never modifies your conversation history (except when you explicitly delete a session).
 
 ## Project Structure
 
@@ -94,15 +142,6 @@ ccsmanager/
 ├── go.mod
 └── README.md
 ```
-
-## How It Works
-
-1. **Scans** `~/.claude/projects/` for JSONL session files
-2. **Parses** each file to extract timestamps, messages, and tool usage
-3. **Displays** sessions sorted by last activity
-4. **Resumes** sessions by calling `claude --resume <session-id>`
-
-The session files are read-only - ccsmanager never modifies your conversation history (except when you explicitly delete a session).
 
 ## Dependencies
 
