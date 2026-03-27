@@ -128,9 +128,16 @@ func (m Model) renderSessionList(width, height int) string {
 			content.WriteString(m.Styles.Dim.Render("  the claude CLI\n"))
 		}
 	} else {
+		// Calculate items per view based on whether we show snippets
+		itemHeight := 1
+		if m.isSmartSearch && len(m.searchResults) > 0 {
+			itemHeight = 3 // session + snippet + blank line
+		}
+		visibleCount := innerHeight / itemHeight
+
 		visible := m.sessions[m.sessionOffset:]
-		if len(visible) > innerHeight {
-			visible = visible[:innerHeight]
+		if len(visible) > visibleCount {
+			visible = visible[:visibleCount]
 		}
 
 		for i, s := range visible {
@@ -138,12 +145,22 @@ func (m Model) renderSessionList(width, height int) string {
 			line := m.renderSessionItem(s, width-4, idx == m.sessionCursor)
 			content.WriteString(line)
 			content.WriteString("\n")
+
+			// Show snippet if smart search is active
+			if m.isSmartSearch && idx < len(m.searchResults) {
+				snippet := m.searchResults[idx].Snippet
+				if snippet != "" {
+					snippetLine := "  " + m.Styles.Dim.Render(truncateString(snippet, width-8))
+					content.WriteString(snippetLine)
+					content.WriteString("\n")
+				}
+			}
 		}
 
-		if len(m.sessions) > innerHeight {
+		if len(m.sessions) > visibleCount {
 			info := fmt.Sprintf(" %d-%d of %d ",
 				m.sessionOffset+1,
-				min(m.sessionOffset+innerHeight, len(m.sessions)),
+				min(m.sessionOffset+visibleCount, len(m.sessions)),
 				len(m.sessions))
 			content.WriteString(m.Styles.Dim.Render(info))
 		}

@@ -534,13 +534,29 @@ func (m *Model) applyFilters() {
 	}
 
 	m.sessions = m.sessionList.Sessions
+	m.searchResults = nil
+	m.isSmartSearch = false
 
 	if m.projectFilter != "" {
 		m.sessions = session.FilterByProject(m.sessions, m.projectFilter)
 	}
 
 	if m.searchQuery != "" {
-		m.sessions = session.Search(m.sessions, m.searchQuery)
+		// Check if it's a smart search query (contains " in ")
+		sq := session.ParseSearchQuery(m.searchQuery)
+		if sq.Project != "" || len(m.searchQuery) > 2 {
+			// Use smart search for better results
+			m.isSmartSearch = true
+			m.searchResults = session.SmartSearch(m.sessions, sq)
+
+			// Extract sessions from results
+			m.sessions = make([]*session.Session, len(m.searchResults))
+			for i, r := range m.searchResults {
+				m.sessions[i] = r.Session
+			}
+		} else {
+			m.sessions = session.Search(m.sessions, m.searchQuery)
+		}
 	}
 
 	if m.sessionCursor >= len(m.sessions) {

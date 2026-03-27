@@ -172,6 +172,29 @@ func LoadMessages(s *Session) error {
 	return scanner.Err()
 }
 
+// SearchQuery represents a parsed smart search query
+type SearchQuery struct {
+	Keyword string
+	Project string
+}
+
+// ParseSearchQuery parses queries like "auth in wal-project" or just "auth"
+func ParseSearchQuery(query string) SearchQuery {
+	query = strings.TrimSpace(query)
+	sq := SearchQuery{}
+
+	// Check for "X in Y" pattern
+	lowerQuery := strings.ToLower(query)
+	if idx := strings.LastIndex(lowerQuery, " in "); idx != -1 {
+		sq.Keyword = strings.TrimSpace(query[:idx])
+		sq.Project = strings.TrimSpace(query[idx+4:])
+	} else {
+		sq.Keyword = query
+	}
+
+	return sq
+}
+
 func Search(sessions []*Session, query string) []*Session {
 	if query == "" {
 		return sessions
@@ -190,6 +213,112 @@ func Search(sessions []*Session, query string) []*Session {
 	}
 
 	return results
+}
+
+// SmartSearch performs a search with keyword and optional project filter
+// Also searches within message content for deep matching
+func SmartSearch(sessions []*Session, sq SearchQuery) []*SearchResult {
+	var results []*SearchResult
+
+	for _, s := range sessions {
+		// Filter by project first if specified
+		if sq.Project != "" {
+			projectMatch := strings.Contains(strings.ToLower(s.ProjectName), strings.ToLower(sq.Project)) ||
+				strings.Contains(strings.ToLower(s.ProjectPath), strings.ToLower(sq.Project))
+			if !projectMatch {
+				continue
+			}
+		}
+
+		// Search for keyword
+		if sq.Keyword == "" {
+			results = append(results, &SearchResult{Session: s})
+			continue
+		}
+
+		keyword := strings.ToLower(sq.Keyword)
+
+		// Check basic fields first
+		if strings.Contains(strings.ToLower(s.FirstMessage), keyword) {
+			results = append(results, &SearchResult{
+				Session: s,
+				Snippet: s.FirstMessage,
+			})
+			continue
+		}
+
+		// Deep search in messages
+		snippet := searchInMessages(s, keyword)
+		if snippet != "" {
+			results = append(results, &SearchResult{
+				Session: s,
+				Snippet: snippet,
+			})
+		}
+	}
+
+	return results
+}
+
+// SearchResult contains a session and matching snippet
+type SearchResult struct {
+	Session *Session
+	Snippet string
+}
+
+func searchInMessages(s *Session, keyword string) string {
+	// Load messages if not loaded
+	if !s.MessagesLoaded {
+		LoadMessages(s)
+	}
+
+	for _, msg := range s.Messages {
+		if msg == nil {
+			continue
+		}
+
+		content := strings.ToLower(msg.Content)
+		if strings.Contains(content, keyword) {
+			// Extract snippet around the match
+			return extractSnippet(msg.Content, keyword)
+		}
+	}
+
+	return ""
+}
+
+func extractSnippet(content, keyword string) string {
+	lowerContent := strings.ToLower(content)
+	idx := strings.Index(lowerContent, strings.ToLower(keyword))
+	if idx == -1 {
+		return ""
+	}
+
+	// Get context around the match
+	start := idx - 50
+	if start < 0 {
+		start = 0
+	}
+
+	end := idx + len(keyword) + 100
+	if end > len(content) {
+		end = len(content)
+	}
+
+	snippet := content[start:end]
+
+	// Clean up snippet
+	snippet = strings.ReplaceAll(snippet, "\n", " ")
+	snippet = strings.Join(strings.Fields(snippet), " ")
+
+	if start > 0 {
+		snippet = "..." + snippet
+	}
+	if end < len(content) {
+		snippet = snippet + "..."
+	}
+
+	return snippet
 }
 
 func FilterByProject(sessions []*Session, projectName string) []*Session {

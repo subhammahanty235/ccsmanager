@@ -47,6 +47,10 @@ type Model struct {
 	searchQuery   string
 	projectFilter string
 
+	// Smart search results
+	searchResults []*session.SearchResult
+	isSmartSearch bool
+
 	Styles ui.Styles
 	Keys   ui.KeyMap
 
@@ -63,7 +67,7 @@ type Model struct {
 
 func NewModel() Model {
 	ti := textinput.New()
-	ti.Placeholder = "Search sessions..."
+	ti.Placeholder = "Search... (try: auth in myproject)"
 	ti.CharLimit = 100
 	ti.Width = 40
 
@@ -112,9 +116,11 @@ func (m Model) ProjectFilter() string             { return m.projectFilter }
 func (m Model) FileTree() *ui.FileNode            { return m.fileTree }
 func (m Model) FileLines() []string               { return m.fileLines }
 func (m Model) ToolUsage() map[string]int         { return m.toolUsage }
-func (m Model) StatusMessage() string             { return m.statusMessage }
-func (m Model) Spinner() spinner.Model            { return m.spinner }
-func (m Model) LoadStart() time.Time              { return m.loadStart }
+func (m Model) StatusMessage() string                     { return m.statusMessage }
+func (m Model) Spinner() spinner.Model                    { return m.spinner }
+func (m Model) LoadStart() time.Time                      { return m.loadStart }
+func (m Model) SearchResults() []*session.SearchResult    { return m.searchResults }
+func (m Model) IsSmartSearch() bool                       { return m.isSmartSearch }
 
 func (m Model) SessionListHeight() int { return m.height - 6 }
 func (m Model) ChatViewHeight() int    { return m.height - 6 }
